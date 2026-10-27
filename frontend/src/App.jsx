@@ -11,6 +11,9 @@ import Faculties from './Pages/Faculty/Faculties'
 import Departments from './Pages/Department/Departments'
 import Notes from './Pages/Notes/Notes'
 import SavedNotes from './Pages/Saved/SavedNotes'
+import Register from './Pages/LoginRegister/Register'
+import Login from './Pages/LoginRegister/Login'
+import AddNote from './Pages/Authorized/AddNote'
 
 
 
@@ -27,8 +30,11 @@ const App = () => {
         <Route path="/saved" element={<SavedNotes />} />
 
 
+        <Route path="/register" element={<Register/>} />
 
+        <Route path="/login" element={<Login/>} />
 
+        <Route path="/add" element={<AddNote/>} />
         
       </Routes>
     </BrowserRouter>
