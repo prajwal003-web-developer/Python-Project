@@ -86,7 +86,7 @@ const Login = () => {
 
       setSuccess(response.data.message || "Login successful!");
 
-
+      location.reload()
       setFormData({
         email: "",
         password: "",

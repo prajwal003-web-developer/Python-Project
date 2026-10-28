@@ -170,3 +170,108 @@ async def upload_note_file(
 
     finally:
         await file.close()
+
+
+
+
+async def delete_note(note_id: str, current_user: dict):
+    # Validate the note ID
+    if not ObjectId.is_valid(note_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid note ID.",
+        )
+
+    user_id = current_user.get("_id")
+
+    if not user_id:
+        raise HTTPException(
+            status_code=401,
+            detail="Authenticated user ID is missing.",
+        )
+
+    # Find the note
+    note = await db["notes"].find_one(
+        {"_id": ObjectId(note_id)}
+    )
+
+    if not note:
+        raise HTTPException(
+            status_code=404,
+            detail="Note not found.",
+        )
+
+    # Only the original uploader can delete this note
+    if str(note.get("uploader_id")) != str(user_id):
+        raise HTTPException(
+            status_code=403,
+            detail="You can only delete notes you uploaded.",
+        )
+
+    file_id = note.get("file_id")
+    file_doc = None
+
+    # Find associated file metadata
+    if file_id and ObjectId.is_valid(str(file_id)):
+        file_doc = await db["files"].find_one(
+            {"_id": ObjectId(str(file_id))}
+        )
+
+    # Check whether another note references the same file
+    other_references = 0
+
+    if file_id:
+        other_references = await db["notes"].count_documents({
+            "file_id": str(file_id),
+            "_id": {"$ne": ObjectId(note_id)},
+        })
+
+    # Delete the note first
+    try:
+        await db["notes"].delete_one(
+            {"_id": ObjectId(note_id)}
+        )
+    except Exception as exc:
+        logger.exception("Failed to delete note from MongoDB")
+        raise HTTPException(
+            status_code=500,
+            detail="Could not delete note.",
+        ) from exc
+
+    # Delete the file only if no other notes use it
+    if file_doc and other_references == 0:
+        cloudinary_id = file_doc.get("cloudinary_id")
+
+        if cloudinary_id:
+            try:
+                result = await run_in_threadpool(
+                    cloudinary.uploader.destroy,
+                    cloudinary_id,
+                    resource_type="raw",
+                )
+
+                if result.get("result") not in ("ok", "not found"):
+                    logger.error(
+                        "Cloudinary deletion returned: %s",
+                        result.get("result"),
+                    )
+            except Exception:
+                # The note is deleted, but the remote file may remain.
+                logger.exception(
+                    "Note deleted, but Cloudinary file cleanup failed"
+                )
+
+        # Remove file metadata from MongoDB
+        try:
+            await db["files"].delete_one(
+                {"_id": file_doc["_id"]}
+            )
+        except Exception:
+            logger.exception(
+                "Note deleted, but file metadata cleanup failed"
+            )
+
+    return {
+        "message": "Note deleted successfully.",
+        "note_id": note_id,
+    }

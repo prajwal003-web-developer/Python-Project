@@ -296,9 +296,9 @@ export default function AddNote() {
       const token =
         localStorage.getItem("Token") ||
         localStorage.getItem("token");
-
+        const links = [ "http://127.0.0.1:8000/api/v1/upload/notes","https://python-project-rxyp.onrender.com/api/v1/upload/notes",]
       const response = await axios.post(
-        "http://127.0.0.1:8000/api/v1/upload/notes",
+          links[1]       ,
         payload,
         {
           headers: {
