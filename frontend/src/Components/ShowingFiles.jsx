@@ -19,6 +19,7 @@ const ShowingFiles = ({
   fileUrl = "#",
   isSaved = false,
   isSaving = false,
+  subject="Dummy",
   onToggleSave = () => {},
 }) => {
   const formatSize = (bytes) => {
@@ -73,7 +74,7 @@ const ShowingFiles = ({
               </span>
 
               <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
-                {department}
+                {subject}
               </span>
             </div>
           </div>

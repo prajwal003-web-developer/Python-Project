@@ -2,8 +2,13 @@
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 
 from app.controllers.auth_controller import get_current_user
-from app.controllers.upload_controller import upload_note_file, delete_note
 
+
+from app.controllers.upload_controller import (
+    upload_note_file,
+    delete_note,
+    get_my_notes,
+)
 
 upload = APIRouter(prefix="/upload", tags=["File Upload"])
 
@@ -42,3 +47,11 @@ async def delete_note_endpoint(
         note_id=note_id,
         current_user=current_user,
     )
+
+
+
+@upload.get("/my-notes")
+async def read_my_notes(
+    current_user: dict = Depends(get_current_user),
+):
+    return await get_my_notes(current_user)

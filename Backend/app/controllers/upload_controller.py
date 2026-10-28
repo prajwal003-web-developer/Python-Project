@@ -275,3 +275,79 @@ async def delete_note(note_id: str, current_user: dict):
         "message": "Note deleted successfully.",
         "note_id": note_id,
     }
+async def get_my_notes(current_user: dict):
+    user_id = current_user.get("_id")
+
+    print(user_id)
+
+    if not user_id:
+        raise HTTPException(
+            status_code=401,
+            detail="Authenticated user ID is missing.",
+        )
+
+    try:
+        # Find only notes uploaded by the logged-in user.
+        cursor = db["notes"].find(
+            {"uploader_id": str(user_id)}
+        ).sort("created_at", -1)
+
+        notes = await cursor.to_list(length=None)
+
+        # Collect valid file IDs so we can fetch file metadata together.
+        file_object_ids = [
+            ObjectId(str(note["file_id"]))
+            for note in notes
+            if note.get("file_id")
+            and ObjectId.is_valid(str(note["file_id"]))
+        ]
+
+        files_by_id = {}
+
+        if file_object_ids:
+            file_cursor = db["files"].find(
+                {"_id": {"$in": file_object_ids}}
+            )
+            file_documents = await file_cursor.to_list(length=None)
+
+            files_by_id = {
+                str(file_doc["_id"]): file_doc
+                for file_doc in file_documents
+            }
+
+        my_notes = []
+
+        for note in notes:
+            file_id = str(note.get("file_id", ""))
+            file_doc = files_by_id.get(file_id, {})
+
+            my_notes.append({
+                "id": str(note["_id"]),
+                "title": note.get("title", ""),
+                "subject": note.get("subject", ""),
+                "description": note.get("description", ""),
+                "faculty": note.get("faculty", ""),
+                "programme": note.get("programme", ""),
+                "semester": note.get("semester", ""),
+                "filename": file_doc.get("original_filename", ""),
+                "file_url": file_doc.get("secure_url", ""),
+                "size": file_doc.get("size", 0),
+                "format": file_doc.get("format", ""),
+                "created_at": (
+                    note["created_at"].isoformat()
+                    if note.get("created_at")
+                    else None
+                ),
+            })
+
+        return {
+            "total": len(my_notes),
+            "notes": my_notes,
+        }
+
+    except PyMongoError as exc:
+        logger.exception("Failed to retrieve user's uploaded notes")
+        raise HTTPException(
+            status_code=500,
+            detail="Could not retrieve your notes.",
+        ) from exc

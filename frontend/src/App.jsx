@@ -23,6 +23,7 @@ import useFacultyStore from './Stores/facultiesStore';
 import Loading from './Components/Loading';
 import Search from './Pages/Search/Search';
 import ComingSoon from './Components/NearFuture';
+import MyNotes from './Pages/Notes/MyNotes';
 
 
 
@@ -78,7 +79,7 @@ const App = () => {
         <Route path="/faculty/:facultyId" element={<Departments/>} />
         <Route path="/faculty/:facultyId/:departmentId/:semester" element={<Notes/>} />
 
-        <Route path="/saved" element={<SavedNotes />} />
+        <Route path="/saved" element={<ComingSoon />} />
 
 
         <Route path="/register" element={<Register/>} />
@@ -86,7 +87,7 @@ const App = () => {
         <Route path="/login" element={<Login/>} />
 
         <Route path="/add" element={<AddNote/>} />
-        <Route path="/my-notes" element={<ComingSoon/>} />
+        <Route path="/my-notes" element={<MyNotes/>} />
 
         <Route path="/profile" element={<Profile/>} />
 

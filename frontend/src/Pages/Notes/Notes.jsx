@@ -63,7 +63,7 @@ const Notes = () => {
 
       const fetchedNotes = response.data?.notes || [];
 
-      console.log(fetchedNotes);
+      // console.log(fetchedNotes);
       // Try to get saved notes. This request requires login,
       // but failure must not prevent public notes from displaying.
       let savedIds = new Set();
@@ -79,7 +79,10 @@ const Notes = () => {
         // User may not be logged in. Public notes still work.
       }
 
+      console.log(fetchedNotes);
+
       const formattedNotes = fetchedNotes.map((note) => ({
+
         id: String(note.id),
         name: note.title || note.filename || "Untitled note",
         size: Number(note.size) || 0,
@@ -88,6 +91,7 @@ const Notes = () => {
         semester: note.semester || semester,
         fileUrl: note.file_url || note.file?.url || "",
         isSaved: savedIds.has(String(note.id)),
+        subject:note?.subject || "Dumy"
       }));
 
       setNotes(formattedNotes);
@@ -307,6 +311,7 @@ const Notes = () => {
                   isSaved={file.isSaved}
                   isSaving={Boolean(savingIds[file.id])}
                   onToggleSave={() => handleToggleSave(file)}
+                  subject={file.subject}
                 />
               ))}
             </div>
