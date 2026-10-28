@@ -66,6 +66,8 @@ async def register_user(data: RegisterRequest):
     email = str(data.email).lower()
     username = data.username.strip().lower()
 
+    print(data)
+
     existing_user = await users_collection.find_one({
         "$or": [
             {"email": email},

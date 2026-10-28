@@ -12,6 +12,7 @@ import {
 
 import HomeLayout from "../../Components/Layouts/HomeLayout";
 import ShowingFiles from "../../Components/ShowingFiles";
+import useUserStore from "../../Stores/useUserStore";
 
 const SavedNotes = ({
   user = null,
@@ -19,7 +20,8 @@ const SavedNotes = ({
   loading = false,
   onToggleSave = () => {},
 }) => {
-  const isLoggedIn = Boolean(user);
+
+  const {isLoggedIn} = useUserStore()
 
   return (
     <HomeLayout>

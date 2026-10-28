@@ -30,67 +30,10 @@ const Departments = () => {
     setError,
   } = useFacultyStore();
 
-  const dummyFaculties = [
-    {
-      id: "engineering",
-      name: "Engineering",
-      departments: [
-        { id: "cse", name: "Computer Science & Engineering" },
-        { id: "it", name: "Information Technology" },
-        { id: "civil", name: "Civil Engineering" },
-        { id: "mechanical", name: "Mechanical Engineering" },
-        { id: "electrical", name: "Electrical Engineering" },
-      ],
-    },
-    {
-      id: "science",
-      name: "Science",
-      departments: [
-        { id: "physics", name: "Physics" },
-        { id: "chemistry", name: "Chemistry" },
-        { id: "mathematics", name: "Mathematics" },
-      ],
-    },
-    {
-      id: "management",
-      name: "Management",
-      departments: [
-        { id: "business", name: "Business Administration" },
-        { id: "commerce", name: "Commerce" },
-      ],
-    },
-    {
-      id: "humanities",
-      name: "Humanities",
-      departments: [
-        { id: "english", name: "English" },
-        { id: "economics", name: "Economics" },
-      ],
-    },
-  ];
 
-  const fetchFaculties = async () => {
-    setLoading(true);
-    setError(null);
 
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      setData(dummyFaculties);
-      setIsFetched(true);
-    } catch {
-      setError("Failed to load departments. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const faculty = faculties?.find((item) => item.slug === facultyId);
 
-  useEffect(() => {
-    if (!isFetched || faculties.length === 0) {
-      fetchFaculties();
-    }
-  }, []);
-
-  const faculty = faculties.find((item) => item.id === facultyId);
 
   const handleDepartmentClick = (departmentId) => {
     setExpandedDepartment((current) =>
@@ -165,9 +108,20 @@ const Departments = () => {
 
           {!loading && !error && faculty && (
             <div className="space-y-4">
-              {faculty.departments.map((department) => {
+              {faculty.programs.map((department) => {
                 const isExpanded =
                   expandedDepartment === department.id;
+                
+                let len 
+                
+
+                if (department.isSemesterWise){
+                  len = parseInt(department.total_year) *2
+                }else{
+                  len = parseInt(department.total_year)
+                }
+
+                console.log(len);
 
                 return (
                   <div
@@ -214,7 +168,7 @@ const Departments = () => {
                       <div className="border-t border-gray-100 bg-gray-50 p-5 sm:p-6">
                         <div className="mb-4">
                           <h3 className="font-semibold text-gray-800">
-                            Select Semester / Year
+                            Select {department.isSemesterWise?"Semester":"Year"}
                           </h3>
 
                           <p className="mt-1 text-sm text-gray-500">
@@ -224,7 +178,7 @@ const Departments = () => {
 
                         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                           {Array.from(
-                            { length: 8 },
+                            { length: len },
                             (_, index) => index + 1
                           ).map((semester) => (
                             <button
@@ -240,7 +194,7 @@ const Departments = () => {
                             >
                               <div>
                                 <p className="text-sm font-bold text-gray-800 group-hover:text-cyan-700">
-                                  Semester {semester}
+                                  {department.isSemesterWise?"Semester":"Year"} {semester}
                                 </p>
 
                                 <p className="mt-1 text-xs text-gray-500">

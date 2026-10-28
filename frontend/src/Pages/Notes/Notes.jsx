@@ -1,14 +1,18 @@
 
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   FiArrowLeft,
   FiBookOpen,
   FiFileText,
+  FiRefreshCw,
+  FiAlertCircle,
 } from "react-icons/fi";
-
 import HomeLayout from "../../Components/Layouts/HomeLayout";
 import ShowingFiles from "../../Components/ShowingFiles";
+import api from "../../Lib/api";
+
+;
 
 const Notes = () => {
   const { facultyId, departmentId, semester } = useParams();
@@ -39,97 +43,74 @@ const Notes = () => {
   const departmentName =
     departmentNames[departmentId] || departmentId;
 
-  const dummyFileUrl =
-    "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf";
-
-  // Dummy data for UI testing. Replace this with backend data later.
-  const [notes, setNotes] = useState(() => [
-    {
-      id: "note-001",
-      name: "Introduction to Programming.pdf",
-      size: 1024 * 1024 * 1.2,
-      faculty: facultyName,
-      department: departmentName,
-      semester,
-      fileUrl: dummyFileUrl,
-      isSaved: true,
-    },
-    {
-      id: "note-002",
-      name: "Data Structures and Algorithms.pdf",
-      size: 1024 * 850,
-      faculty: facultyName,
-      department: departmentName,
-      semester,
-      fileUrl: dummyFileUrl,
-      isSaved: false,
-    },
-    {
-      id: "note-003",
-      name: "Database Management Systems.pdf",
-      size: 1024 * 1024 * 2.4,
-      faculty: facultyName,
-      department: departmentName,
-      semester,
-      fileUrl: dummyFileUrl,
-      isSaved: false,
-    },
-    {
-      id: "note-004",
-      name: "Computer Networks.pdf",
-      size: 1024 * 650,
-      faculty: facultyName,
-      department: departmentName,
-      semester,
-      fileUrl: dummyFileUrl,
-      isSaved: true,
-    },
-    {
-      id: "note-005",
-      name: "Operating Systems - Unit Notes.pdf",
-      size: 1024 * 1024 * 1.8,
-      faculty: facultyName,
-      department: departmentName,
-      semester,
-      fileUrl: dummyFileUrl,
-      isSaved: false,
-    },
-    {
-      id: "note-006",
-      name: "Previous Year Question Paper.pdf",
-      size: 1024 * 420,
-      faculty: facultyName,
-      department: departmentName,
-      semester,
-      fileUrl: dummyFileUrl,
-      isSaved: false,
-    },
-  ]);
-
+  const [notes, setNotes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [savingIds, setSavingIds] = useState({});
 
-  // Dummy API call. Replace with your FastAPI request later.
-  const mockSaveNoteApi = (noteId, shouldSave) => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        console.log(
-          `Dummy API: ${shouldSave ? "Saved" : "Unsaved"} note`,
-          noteId
-        );
+  const fetchNotes = useCallback(async () => {
+    setLoading(true);
+    setError("");
 
-        resolve({
-          success: true,
-          id: noteId,
-          isSaved: shouldSave,
-        });
-      }, 1000);
-    });
-  };
+    try {
+      // Public endpoint: no login required.
+      const response = await api.get("/notes/", {
+        params: {
+          programme_id: departmentId,
+          semester,
+        },
+      });
+
+      const fetchedNotes = response.data?.notes || [];
+
+      console.log(fetchedNotes);
+      // Try to get saved notes. This request requires login,
+      // but failure must not prevent public notes from displaying.
+      let savedIds = new Set();
+
+      try {
+        const savedResponse = await api.get("/notes/saved");
+        const savedNotes = savedResponse.data?.notes || [];
+
+        savedIds = new Set(
+          savedNotes.map((note) => String(note.id))
+        );
+      } catch {
+        // User may not be logged in. Public notes still work.
+      }
+
+      const formattedNotes = fetchedNotes.map((note) => ({
+        id: String(note.id),
+        name: note.title || note.filename || "Untitled note",
+        size: Number(note.size) || 0,
+        faculty: facultyName,
+        department: departmentName,
+        semester: note.semester || semester,
+        fileUrl: note.file_url || note.file?.url || "",
+        isSaved: savedIds.has(String(note.id)),
+      }));
+
+      setNotes(formattedNotes);
+    } catch (err) {
+      console.error("Failed to fetch notes:", err);
+
+      setError(
+        err.response?.data?.detail ||
+          "Unable to load notes. Please check your connection and try again."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [departmentId, semester, facultyName, departmentName]);
+
+  useEffect(() => {
+    fetchNotes();
+  }, [fetchNotes]);
 
   const handleToggleSave = async (note) => {
     if (savingIds[note.id]) return;
 
-    const nextSavedState = !note.isSaved;
+    const shouldSave = !note.isSaved;
 
     setSavingIds((previous) => ({
       ...previous,
@@ -137,22 +118,32 @@ const Notes = () => {
     }));
 
     try {
-      const response = await mockSaveNoteApi(
-        note.id,
-        nextSavedState
-      );
+      if (shouldSave) {
+        await api.post(`/notes/${note.id}/save`);
+      } else {
+        await api.delete(`/notes/${note.id}/save`);
+      }
 
-      if (response.success) {
-        setNotes((previous) =>
-          previous.map((item) =>
-            item.id === note.id
-              ? { ...item, isSaved: response.isSaved }
-              : item
-          )
+      setNotes((previous) =>
+        previous.map((item) =>
+          item.id === note.id
+            ? { ...item, isSaved: shouldSave }
+            : item
+        )
+      );
+    } catch (err) {
+      console.error("Failed to update saved note:", err);
+
+      if (err.response?.status === 401) {
+        window.alert("Please log in to save notes.");
+      } else if (err.response?.status === 403) {
+        window.alert("You don't have permission to save this note.");
+      } else {
+        window.alert(
+          err.response?.data?.detail ||
+            "Could not update the saved note. Please try again."
         );
       }
-    } catch (error) {
-      console.error("Failed to update saved note:", error);
     } finally {
       setSavingIds((previous) => ({
         ...previous,
@@ -197,7 +188,7 @@ const Notes = () => {
 
                 <div>
                   <p className="text-2xl font-bold text-gray-900">
-                    {notes.length}
+                    {loading ? "—" : notes.length}
                   </p>
                   <p className="text-sm text-gray-500">
                     Total Files
@@ -221,18 +212,88 @@ const Notes = () => {
             </div>
           </div>
 
-          {/* Files */}
-          <div className="mb-5">
-            <h2 className="text-xl font-bold text-gray-800">
-              Available Files
-            </h2>
+          {/* Section heading */}
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-bold text-gray-800">
+                Available Files
+              </h2>
 
-            <p className="mt-1 text-sm text-gray-500">
-              {notes.length} files available
-            </p>
+              <p className="mt-1 text-sm text-gray-500">
+                {loading
+                  ? "Loading study materials..."
+                  : `${notes.length} files available`}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={fetchNotes}
+              disabled={loading}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition hover:border-cyan-300 hover:text-cyan-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <FiRefreshCw
+                className={loading ? "animate-spin" : ""}
+              />
+              Refresh
+            </button>
           </div>
 
-          {notes.length > 0 ? (
+          {/* Loading state */}
+          {loading && (
+            <div className="space-y-4" aria-live="polite">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="animate-pulse rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="h-12 w-12 shrink-0 rounded-xl bg-gray-200" />
+
+                    <div className="flex-1 space-y-3">
+                      <div className="h-4 w-2/3 rounded bg-gray-200" />
+                      <div className="h-3 w-1/3 rounded bg-gray-100" />
+                      <div className="h-3 w-1/2 rounded bg-gray-100" />
+                    </div>
+
+                    <div className="hidden h-9 w-24 rounded-lg bg-gray-100 sm:block" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Error state */}
+          {!loading && error && (
+            <div
+              role="alert"
+              className="rounded-2xl border border-red-100 bg-white px-6 py-12 text-center"
+            >
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-500">
+                <FiAlertCircle size={26} />
+              </div>
+
+              <h3 className="text-lg font-semibold text-gray-800">
+                Could not load notes
+              </h3>
+
+              <p className="mx-auto mt-2 max-w-lg text-sm text-gray-500">
+                {error}
+              </p>
+
+              <button
+                type="button"
+                onClick={fetchNotes}
+                className="mt-5 inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-cyan-700"
+              >
+                <FiRefreshCw />
+                Try Again
+              </button>
+            </div>
+          )}
+
+          {/* Notes list */}
+          {!loading && !error && notes.length > 0 && (
             <div className="space-y-4">
               {notes.map((file) => (
                 <ShowingFiles
@@ -249,7 +310,10 @@ const Notes = () => {
                 />
               ))}
             </div>
-          ) : (
+          )}
+
+          {/* Empty state */}
+          {!loading && !error && notes.length === 0 && (
             <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-14 text-center">
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-50 text-cyan-600">
                 <FiFileText size={26} />

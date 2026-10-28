@@ -1,6 +1,11 @@
 
 import React, { useState } from "react";
-import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import {
+  Link,
+  NavLink,
+  Navigate,
+  useNavigate,
+} from "react-router-dom";
 import {
   BookOpen,
   House,
@@ -13,6 +18,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import axios from "axios";
+import useUserStore from "../../../Stores/useUserStore";
 
 const API_URL = "http://127.0.0.1:8000";
 
@@ -25,22 +31,13 @@ const AuthorizedNavbar = () => {
 
   const navigate = useNavigate();
 
+  const user = useUserStore((state) => state.user);
+  const clearAuth = useUserStore((state) => state.clearAuth);
+
   const navItems = [
-    {
-      label: "Home",
-      path: "/",
-      icon: House,
-    },
-    {
-      label: "Add Notes",
-      path: "/add",
-      icon: FilePlus2,
-    },
-    {
-      label: "My Notes",
-      path: "/my-notes",
-      icon: Files,
-    },
+    { label: "Home", path: "/", icon: House },
+    { label: "Add Notes", path: "/add", icon: FilePlus2 },
+    { label: "My Notes", path: "/my-notes", icon: Files },
   ];
 
   const navLinkClass = ({ isActive }) =>
@@ -56,21 +53,21 @@ const AuthorizedNavbar = () => {
     setLoggingOut(true);
 
     try {
-      // Update this endpoint to match your FastAPI backend.
       await axios.post(
         `${API_URL}/api/auth/logout`,
         {},
         { withCredentials: true }
       );
-
-      navigate("/login", { replace: true });
     } catch (error) {
-      console.error("Logout failed:", error);
-      alert("Could not log out. Please try again.");
+      console.error("Logout request failed:", error);
     } finally {
+      // Clear frontend authentication state
+      clearAuth();
       setLoggingOut(false);
       setProfileOpen(false);
       setMenuOpen(false);
+
+      navigate("/login", { replace: true });
     }
   };
 
@@ -99,21 +96,17 @@ const AuthorizedNavbar = () => {
 
         {/* Desktop navigation */}
         <div className="hidden items-center gap-1 md:flex">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-
-            return (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                end={item.path === "/"}
-                className={navLinkClass}
-              >
-                <Icon size={17} />
-                {item.label}
-              </NavLink>
-            );
-          })}
+          {navItems.map(({ label, path, icon: Icon }) => (
+            <NavLink
+              key={path}
+              to={path}
+              end={path === "/"}
+              className={navLinkClass}
+            >
+              <Icon size={17} />
+              {label}
+            </NavLink>
+          ))}
         </div>
 
         {/* Desktop profile */}
@@ -128,8 +121,8 @@ const AuthorizedNavbar = () => {
               <UserRound size={17} />
             </div>
 
-            <span className="text-sm font-semibold text-gray-700">
-              Account
+            <span className="max-w-32 truncate text-sm font-semibold text-gray-700">
+              {user?.username || user?.full_name || "Account"}
             </span>
 
             <ChevronDown size={15} className="text-gray-400" />
@@ -166,30 +159,33 @@ const AuthorizedNavbar = () => {
       {menuOpen && (
         <div className="border-t border-gray-100 bg-white px-4 py-4 shadow-lg md:hidden">
           <div className="mx-auto max-w-7xl space-y-1">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-
-              return (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  end={item.path === "/"}
-                  onClick={() => setMenuOpen(false)}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition ${
-                      isActive
-                        ? "bg-cyan-50 text-cyan-700"
-                        : "text-gray-600 hover:bg-gray-50"
-                    }`
-                  }
-                >
-                  <Icon size={19} />
-                  {item.label}
-                </NavLink>
-              );
-            })}
+            {navItems.map(({ label, path, icon: Icon }) => (
+              <NavLink
+                key={path}
+                to={path}
+                end={path === "/"}
+                onClick={() => setMenuOpen(false)}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition ${
+                    isActive
+                      ? "bg-cyan-50 text-cyan-700"
+                      : "text-gray-600 hover:bg-gray-50"
+                  }`
+                }
+              >
+                <Icon size={19} />
+                {label}
+              </NavLink>
+            ))}
 
             <div className="my-3 border-t border-gray-100" />
+
+            <div className="px-4 py-2 text-sm text-gray-500">
+              Signed in as{" "}
+              <span className="font-semibold text-gray-800">
+                {user?.username || user?.full_name || "User"}
+              </span>
+            </div>
 
             <button
               type="button"
@@ -209,12 +205,17 @@ const AuthorizedNavbar = () => {
 
 // ---------------- AUTHORIZED LAYOUT ----------------
 
-const AuthorizedLayout = ({children}) => {
+const AuthorizedLayout = ({ children }) => {
+  const isLoggedIn = useUserStore((state) => state.isLoggedIn);
+
+  if (!isLoggedIn) {
+    return <Navigate to="/login" replace />;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <AuthorizedNavbar />
 
-      {/* Offset for the fixed navbar */}
       <main className="min-h-screen pt-16">
         {children}
       </main>

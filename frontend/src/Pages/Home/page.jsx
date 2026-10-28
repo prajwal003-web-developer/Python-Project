@@ -17,43 +17,21 @@ import {
 
 import HomeLayout from '../../Components/Layouts/HomeLayout'
 import { FaGraduationCap } from 'react-icons/fa'
+import useFacultyStore from '../../Stores/facultiesStore'
 
-const faculties = [
-  {
-    name: 'Faculty of Engineering',
-    description: 'Engineering programs and technical study materials.',
-    icon: FiCpu,
-    color: 'bg-cyan-50 text-cyan-700',
-    path: '/faculty/engineering',
-  },
-  {
-    name: 'Faculty of Science',
-    description: 'Science programs, course materials, and lecture notes.',
-    icon: FiMonitor,
-    color: 'bg-violet-50 text-violet-700',
-    path: '/faculty/science',
-  },
-  {
-    name: 'Faculty of Management',
-    description: 'Management, business, and related academic resources.',
-    icon: FiLayers,
-    color: 'bg-amber-50 text-amber-700',
-    path: '/faculty/management',
-  },
-  {
-    name: 'Other Faculties',
-    description: 'Explore other faculties available on the platform.',
-    icon: FaGraduationCap,
-    color: 'bg-emerald-50 text-emerald-700',
-    path: '/faculty',
-  },
-]
+
+
+
 
 const Home = () => {
   const [search, setSearch] = useState('')
 
+  const {isLoading , data} = useFacultyStore()
+
+
   const handleSearch = (e) => {
     e.preventDefault()
+
 
     const query = search.trim()
 
@@ -252,14 +230,14 @@ const Home = () => {
             </Link>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {faculties.map((faculty) => {
-              const Icon = faculty.icon
-
+          { !!!isLoading &&
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {data?.map((faculty) => {
+              const Icon = FaGraduationCap
               return (
                 <Link
-                  key={faculty.name}
-                  to={faculty.path}
+                  key={faculty?.name}
+                  to={`/faculty/${faculty?.slug}`}
                   className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition duration-300 hover:-translate-y-1 hover:border-cyan-200 hover:shadow-xl hover:shadow-cyan-900/5 sm:p-6"
                 >
                   <div className="flex items-center justify-between">
@@ -273,12 +251,9 @@ const Home = () => {
                   </div>
 
                   <h3 className="mt-5 text-lg font-bold text-slate-900 transition group-hover:text-cyan-700">
-                    {faculty.name}
+                    {faculty?.name}
                   </h3>
 
-                  <p className="mt-2 text-sm leading-6 text-slate-500">
-                    {faculty.description}
-                  </p>
 
                   <div className="mt-5 border-t border-slate-100 pt-4 text-xs font-semibold text-slate-500">
                     Explore academic resources
@@ -287,6 +262,7 @@ const Home = () => {
               )
             })}
           </div>
+          }
 
           <p className="mt-4 text-xs leading-5 text-slate-400">
             Faculty cards are examples. Replace them with the actual faculties

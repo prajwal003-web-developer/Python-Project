@@ -2,6 +2,9 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
+import api from "../../Lib/api";
+import { toast } from "react-toastify";
+import useUserStore from "../../Stores/useUserStore";
 
 const API_URL = "http://127.0.0.1:8000";
 
@@ -19,6 +22,9 @@ const Register = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+
+  const {isLoggedIn} = useUserStore()
 
   // Update form data whenever an input changes
   const handleChange = (e) => {
@@ -90,10 +96,11 @@ const Register = () => {
         username: formData.username.trim(),
         email: formData.email.trim().toLowerCase(),
         password: formData.password,
+        confirm_password:formData.confirm_password
       };
 
-      const response = await axios.post(
-        `${API_URL}/api/auth/register`,
+      const response = await api.post(
+        `/auth/register`,
         payload
       );
 
@@ -109,13 +116,13 @@ const Register = () => {
         confirm_password: "",
       });
 
-      // Adjust this route if your project uses a different login path
-      setTimeout(() => {
-        navigate("/login");
-      }, 1200);
+      toast.success("Successfully Register Now Please Login")
+      navigate('/login')
+      
     } catch (err) {
       const detail = err.response?.data?.detail;
-
+      console.log(err);
+      toast.error("Failed To Register")
       setError(
         typeof detail === "string"
           ? detail
@@ -128,6 +135,12 @@ const Register = () => {
       setLoading(false);
     }
   };
+
+    useEffect(()=>{
+      if(isLoggedIn){
+        navigate('/')
+      }
+    },[isLoggedIn])
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-10">

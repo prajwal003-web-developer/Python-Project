@@ -1,12 +1,23 @@
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import axios from "axios";
+import api from "../../Lib/api";
+import useUserStore from "../../Stores/useUserStore";
+import { toast } from "react-toastify";
+
 
 const API_URL = "http://127.0.0.1:8000";
 
 const Login = () => {
   const navigate = useNavigate();
+
+  const {isLoggedIn , setIsLoggedIn} = useUserStore()
+
+  useEffect(()=>{
+    if(isLoggedIn){
+      navigate('/')
+    }
+  },[isLoggedIn])
 
   const [formData, setFormData] = useState({
     email: "",
@@ -68,28 +79,29 @@ const Login = () => {
         password: formData.password,
       };
 
-      const response = await axios.post(
-        `${API_URL}/api/auth/login`,
+      const response = await api.post(
+        `/auth/login`,
         payload
       );
 
       setSuccess(response.data.message || "Login successful!");
 
-      // If your backend returns a token, save it according to
-      // your authentication strategy.
-      // Prefer secure HttpOnly cookies for production apps.
 
       setFormData({
         email: "",
         password: "",
       });
+      setIsLoggedIn(true)
 
-      // Change this route to the page you want after login
-      setTimeout(() => {
-        navigate("/");
-      }, 800);
+      let token = response.data.access_token;
+      
+      localStorage.setItem("Token" , token)
+
+     
     } catch (err) {
       const detail = err.response?.data?.detail;
+
+      toast.error("Failed To Login")
 
       setError(
         typeof detail === "string"

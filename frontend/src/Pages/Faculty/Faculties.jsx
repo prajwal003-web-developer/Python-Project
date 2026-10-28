@@ -7,95 +7,24 @@ import {
   
   FiRefreshCw,
 } from "react-icons/fi";
-import useFacultyStore from "../../Stores/facultiesStore";
+
 import HomeLayout from "../../Components/Layouts/HomeLayout";
 import Loading from "../../Components/Loading";
 import { FaGraduationCap } from "react-icons/fa";
+import useFacultyStore from "../../Stores/facultiesStore";
 
 
 
 const Faculties = () => {
   const {
     data,
-    setData,
-    isFetched,
-    setIsFetched,
-    loading,
-    setLoading,
-    error,
-    setError,
+   loading,
+   error
   } = useFacultyStore();
 
   // Temporary dummy data; replace with your API response later.
-  const dummyFaculties = [
-    {
-      id: "engineering",
-      name: "Faculty of Engineering",
-      description: "Engineering departments and study materials.",
-      departments: [
-        { id: "cse", name: "Computer Science Engineering" },
-        { id: "it", name: "Information Technology" },
-        { id: "civil", name: "Civil Engineering" },
-        { id: "mechanical", name: "Mechanical Engineering" },
-        { id: "electrical", name: "Electrical Engineering" },
-      ],
-    },
-    {
-      id: "science",
-      name: "Faculty of Science",
-      description: "Science departments and academic resources.",
-      departments: [
-        { id: "physics", name: "Physics" },
-        { id: "chemistry", name: "Chemistry" },
-        { id: "mathematics", name: "Mathematics" },
-      ],
-    },
-    {
-      id: "management",
-      name: "Faculty of Management",
-      description: "Management and business study materials.",
-      departments: [
-        { id: "business", name: "Business Administration" },
-        { id: "commerce", name: "Commerce" },
-      ],
-    },
-    {
-      id: "humanities",
-      name: "Faculty of Humanities",
-      description: "Humanities departments and study resources.",
-      departments: [
-        { id: "english", name: "English" },
-        { id: "economics", name: "Economics" },
-      ],
-    },
-  ];
 
-  const fetchFaculties = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Simulate an API request and loading effect.
-      await new Promise((resolve) => setTimeout(resolve, 1200));
-
-      // Later, replace this with your actual API call:
-      // const response = await axios.get("/api/faculties");
-      // setData(response.data);
-
-      setData(dummyFaculties);
-      setIsFetched(true);
-    } catch (err) {
-      setError("Failed to load faculties. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!isFetched) {
-      fetchFaculties();
-    }
-  }, [isFetched]);
+  console.log(data);
 
   return (
     <HomeLayout>
@@ -149,10 +78,10 @@ const Faculties = () => {
             </div>
           ) : (
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {data.map((faculty, index) => (
+              {data?.map((faculty, index) => (
                 <Link
                   key={faculty.id}
-                  to={`/faculty/${faculty.id}`}
+                  to={`/faculty/${faculty.slug}`}
                   className="group rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:border-cyan-200 hover:shadow-lg"
                 >
                   <div className="flex items-center justify-between">
@@ -166,17 +95,14 @@ const Faculties = () => {
                   </div>
 
                   <h2 className="mt-5 text-lg font-bold text-gray-900 transition group-hover:text-cyan-700">
-                    {faculty.name}
+                    {faculty?.name}
                   </h2>
 
-                  <p className="mt-2 min-h-10 text-sm leading-6 text-gray-500">
-                    {faculty.description}
-                  </p>
-
+                 
                   <div className="mt-5 flex items-center justify-between border-t border-gray-100 pt-4">
                     <span className="flex items-center gap-2 text-sm text-gray-500">
                       <FiBookOpen size={16} />
-                      {faculty.departments.length} departments
+                      {faculty?.programs.length} departments
                     </span>
 
                     <span className="flex items-center gap-1 text-sm font-semibold text-cyan-700">

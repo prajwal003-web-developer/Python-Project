@@ -16,20 +16,14 @@ import {
 } from "react-icons/fi";
 import Logo from "./Logo";
 import { FaGraduationCap } from "react-icons/fa";
+import useUserStore from "../Stores/useUserStore";
 
 const Navbar = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
-  // Temporary authentication state.
-  // Replace this with your actual authentication logic later.
-  const isLoggedIn = false;
-
-  const user = {
-    name: "Student",
-    email: "student@example.com",
-  };
+  const {isLoggedIn , user} = useUserStore()
 
   const navigate = useNavigate();
 

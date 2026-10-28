@@ -1,123 +1,254 @@
 
-import React, { useState } from "react";
-import axios from "axios";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import AuthorizedLayout from "./Layouts/AuthorizedLayout";
+import {
+  FiUploadCloud,
+  FiFileText,
+  FiX,
+  FiCheckCircle,
+  FiAlertCircle,
+  FiLoader,
+} from "react-icons/fi";
 
-const API_URL = "http://127.0.0.1:8000";
+import useFacultyStore from "../../Stores/facultiesStore";
+import AuthorizedLayout from "../Authorized/Layouts/AuthorizedLayout";
+import api from "../../Lib/api";
+import axios from "axios";
 
-const faculties = [
-  "Faculty of Computer Technology",
-  "Faculty of Engineering",
-  "Faculty of Science",
-  "Faculty of Business Administration",
-];
+const MAX_FILE_SIZE = 20 * 1024 * 1024;
+const ALLOWED_EXTENSIONS = [".pdf", ".docx", ".ppt", ".pptx"];
 
-const programmes = [
-  "B.Tech Computer Science and Engineering",
-  "B.Tech Information Technology",
-  "BCA",
-  "MCA",
-  "BBA",
-  "B.Sc",
-  "M.Sc",
-];
+const initialFormData = {
+  title: "",
+  description: "",
+  faculty: "",
+  programme: "",
+  semester: "",
+  subject: "",
+};
 
-const semesters = [
-  "1st Semester",
-  "2nd Semester",
-  "3rd Semester",
-  "4th Semester",
-  "5th Semester",
-  "6th Semester",
-  "7th Semester",
-  "8th Semester",
-];
+const getErrorMessage = (err, fallback) => {
+  const detail = err.response?.data?.detail;
 
-const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
+  if (typeof detail === "string") return detail;
 
-const allowedExtensions = [".pdf", ".docx", ".ppt", ".pptx"];
+  if (Array.isArray(detail)) {
+    return detail.map((item) => item.msg || "Invalid input").join(", ");
+  }
 
-const AddNote = () => {
+  return err.response?.data?.message || fallback;
+};
+
+const getStudyOptions = (programme) => {
+  if (!programme) return [];
+
+  const totalYear = Number(programme.total_year);
+
+  if (!Number.isInteger(totalYear) || totalYear < 1) {
+    return [];
+  }
+
+  const total = programme.isSemesterWise
+    ? totalYear * 2
+    : totalYear;
+
+  return Array.from({ length: total }, (_, index) => ({
+    value: String(index + 1),
+    label: programme.isSemesterWise
+      ? `Semester ${index + 1}`
+      : `Year ${index + 1}`,
+  }));
+};
+
+export default function AddNote() {
   const navigate = useNavigate();
+  const fileInputRef = useRef(null);
 
-  const [formData, setFormData] = useState({
-    title: "",
-    description: "",
-    faculty: "",
-    programme: "",
-    semester: "",
-    subject: "",
-  });
+  // Read the existing faculty data from Zustand.
+  const faculties = useFacultyStore((state) => state.data);
+  const isFetched = useFacultyStore((state) => state.isFetched);
+  const setData = useFacultyStore((state) => state.setData);
+  const setIsFetched = useFacultyStore((state) => state.setIsFetched);
+  const facultyLoading = useFacultyStore((state) => state.loading);
+  const setFacultyLoading = useFacultyStore((state) => state.setLoading);
+  const facultyError = useFacultyStore((state) => state.error);
+  const setFacultyError = useFacultyStore((state) => state.setError);
 
+  const [formData, setFormData] = useState(initialFormData);
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
+  // Fetch faculties only when they are not already in the store.
+  useEffect(() => {
+    if (isFetched) return;
 
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    let active = true;
+
+    const fetchFaculties = async () => {
+      setFacultyLoading(true);
+      setFacultyError(null);
+
+      try {
+        const response = await api.get("/faculties");
+        const result = response.data;
+
+        const facultyList = Array.isArray(result)
+          ? result
+          : result?.data || result?.faculties || [];
+
+        if (active) {
+          setData(facultyList);
+          setIsFetched(true);
+        }
+      } catch (err) {
+        if (active) {
+          setFacultyError(
+            getErrorMessage(err, "Failed to load faculties.")
+          );
+        }
+      } finally {
+        if (active) setFacultyLoading(false);
+      }
+    };
+
+    fetchFaculties();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    isFetched,
+    setData,
+    setIsFetched,
+    setFacultyLoading,
+    setFacultyError,
+  ]);
+
+  // Find the selected faculty using its ID.
+  const selectedFaculty = faculties.find(
+    (faculty) => String(faculty.id) === String(formData.faculty)
+  );
+
+  // Your faculty objects contain nested programs.
+  const programmes = Array.isArray(selectedFaculty?.programs)
+    ? selectedFaculty.programs
+    : [];
+
+  // Find the programme within the selected faculty.
+  const selectedProgramme = programmes.find(
+    (programme) =>
+      String(programme.id) === String(formData.programme)
+  );
+
+  // Calculate semester/year choices from the programme properties.
+  const studyOptions = getStudyOptions(selectedProgramme);
+
+  const studyLabel = selectedProgramme?.isSemesterWise
+    ? "Semester"
+    : "Year";
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+
+    setFormData((previous) => {
+      if (name === "faculty") {
+        return {
+          ...previous,
+          faculty: value,
+          programme: "",
+          semester: "",
+        };
+      }
+
+      if (name === "programme") {
+        return {
+          ...previous,
+          programme: value,
+          semester: "",
+        };
+      }
+
+      return {
+        ...previous,
+        [name]: value,
+      };
+    });
 
     setError("");
     setSuccess("");
   };
 
-  const handleFileChange = (e) => {
-    const selectedFile = e.target.files?.[0];
+  const handleFileChange = (event) => {
+    const selectedFile = event.target.files?.[0];
 
+    setFile(null);
     setError("");
     setSuccess("");
-    setFile(null);
 
     if (!selectedFile) return;
 
-    const extension = selectedFile.name
-      .slice(selectedFile.name.lastIndexOf("."))
-      .toLowerCase();
+    const dotIndex = selectedFile.name.lastIndexOf(".");
+    const extension =
+      dotIndex >= 0
+        ? selectedFile.name.slice(dotIndex).toLowerCase()
+        : "";
 
-    if (!allowedExtensions.includes(extension)) {
+    if (!ALLOWED_EXTENSIONS.includes(extension)) {
       setError("Only PDF, DOCX, PPT, and PPTX files are allowed.");
-      e.target.value = "";
-      return;
-    }
-
-    if (selectedFile.size > MAX_FILE_SIZE) {
-      setError("File size must be 20 MB or less.");
-      e.target.value = "";
+      event.target.value = "";
       return;
     }
 
     if (selectedFile.size === 0) {
       setError("The selected file is empty.");
-      e.target.value = "";
+      event.target.value = "";
+      return;
+    }
+
+    if (selectedFile.size > MAX_FILE_SIZE) {
+      setError("File size must be 20 MB or less.");
+      event.target.value = "";
       return;
     }
 
     setFile(selectedFile);
   };
 
-  const validateForm = () => {
-    const {
-      title,
-      faculty,
-      programme,
-      semester,
-      subject,
-    } = formData;
+  const handleRemoveFile = () => {
+    setFile(null);
 
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const validateForm = () => {
     if (
-      !title.trim() ||
-      !faculty ||
-      !programme ||
-      !semester ||
-      !subject.trim()
+      !formData.title.trim() ||
+      !formData.faculty ||
+      !formData.programme ||
+      !formData.semester ||
+      !formData.subject.trim()
     ) {
       return "Please complete all required fields.";
+    }
+
+    if (!selectedFaculty) {
+      return "Please select a valid faculty.";
+    }
+
+    if (!selectedProgramme) {
+      return "Please select a valid programme.";
+    }
+
+    if (
+      !studyOptions.some(
+        (option) => option.value === formData.semester
+      )
+    ) {
+      return `Please select a valid ${studyLabel.toLowerCase()}.`;
     }
 
     if (!file) {
@@ -127,8 +258,8 @@ const AddNote = () => {
     return null;
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
 
     setError("");
     setSuccess("");
@@ -144,56 +275,57 @@ const AddNote = () => {
 
     payload.append("title", formData.title.trim());
     payload.append("description", formData.description.trim());
-    payload.append("faculty", formData.faculty);
-    payload.append("programme", formData.programme);
-    payload.append("semester", formData.semester);
+
+    // Send the selected faculty and programme IDs.
+    payload.append("faculty", selectedFaculty.id);
+    payload.append("programme", selectedProgramme.id);
+
+    // Semester-wise programmes send "semester".
+    // Year-wise programmes send "year".
+    payload.append(
+      selectedProgramme.isSemesterWise ? "semester" : "year",
+      formData.semester
+    );
+
     payload.append("subject", formData.subject.trim());
     payload.append("file", file);
 
     try {
       setLoading(true);
 
-      // This endpoint must match your FastAPI backend.
-      // If your backend uses cookie-based authentication,
-      // withCredentials allows the browser to send its cookie.
+      const token =
+        localStorage.getItem("Token") ||
+        localStorage.getItem("token");
+
       const response = await axios.post(
-        `${API_URL}/api/notes`,
+        "http://127.0.0.1:8000/api/v1/upload/notes",
         payload,
         {
+          headers: {
+            "Content-Type": "multipart/form-data",
+            Authorization: `Bearer ${token}`,
+           
+          },
           withCredentials: true,
         }
       );
 
-      setSuccess(response.data.message || "Note uploaded successfully!");
+      setSuccess(
+        response.data?.message || "Note uploaded successfully!"
+      );
 
-      setFormData({
-        title: "",
-        description: "",
-        faculty: "",
-        programme: "",
-        semester: "",
-        subject: "",
-      });
-
+      setFormData(initialFormData);
       setFile(null);
 
-      // Reset the native file input.
-      e.target.reset();
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
 
-      // Navigate to your notes page after successful upload.
-      setTimeout(() => {
-        navigate("/notes");
-      }, 1200);
+
     } catch (err) {
-      const detail = err.response?.data?.detail;
-
+      console.log(err);
       setError(
-        typeof detail === "string"
-          ? detail
-          : Array.isArray(detail)
-            ? detail.map((item) => item.msg).join(", ")
-            : err.response?.data?.message ||
-              "Upload failed. Please try again."
+        getErrorMessage(err, "Upload failed. Please try again.")
       );
     } finally {
       setLoading(false);
@@ -201,293 +333,326 @@ const AddNote = () => {
   };
 
   const inputClass =
-    "w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100";
+    "w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10 disabled:cursor-not-allowed disabled:bg-slate-50";
 
   const labelClass =
-    "mb-2 block text-sm font-semibold text-gray-700";
+    "mb-2 block text-sm font-semibold text-slate-700";
 
   return (
     <AuthorizedLayout>
-    <div className="min-h-screen bg-gray-52 px-4 py-10 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-4xl">
-        {/* Page heading */}
-        <div className="mb-9">
-          <p className="mb-3 text-sm font-semibold text-cyan-700">
-            EDUNOTES / UPLOAD
-          </p>
+      <main className="min-h-screen bg-slate-50 px-4 py-10 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-4xl">
+          <div className="mb-8">
+            <p className="mb-3 text-sm font-bold tracking-widest text-cyan-700">
+              EDUNOTES / UPLOAD
+            </p>
 
-          <h0 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
-            Add academic notes
-          </h0>
+            <h1 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
+              Add academic notes
+            </h1>
 
-          <p className="mt-4 text-sm leading-6 text-gray-500 sm:text-base">
-            Share study materials with students by organizing them
-            according to faculty, programme, semester, and subject.
-          </p>
-        </div>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-500 sm:text-base">
+              Share academic materials organized by faculty,
+              programme, semester or year, and subject.
+            </p>
+          </div>
 
-        {/* Main form card */}
-        <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm sm:p-8">
-          {error && (
-            <div
-              role="alert"
-              className="mb-7 rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700"
-            >
-              {error}
-            </div>
-          )}
-
-          {success && (
-            <div
-              role="status"
-              className="mb-7 rounded-xl border border-green-100 bg-green-50 p-4 text-sm text-green-700"
-            >
-              {success}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-7">
-            {/* Title */}
-            <div>
-              <label htmlFor="title" className={labelClass}>
-                Note title <span className="text-red-501">*</span>
-              </label>
-
-              <input
-                id="title"
-                name="title"
-                type="text"
-                placeholder="e.g. Introduction to Python Programming"
-                value={formData.title}
-                onChange={handleChange}
-                maxLength={149}
-                required
-                disabled={loading}
-                className={inputClass}
-              />
-            </div>
-
-            {/* Description */}
-            <div>
-              <label htmlFor="description" className={labelClass}>
-                Description
-              </label>
-
-              <textarea
-                id="description"
-                name="description"
-                rows={2}
-                maxLength={999}
-                placeholder="Briefly describe what these notes cover..."
-                value={formData.description}
-                onChange={handleChange}
-                disabled={loading}
-                className={`${inputClass} resize-y`}
-              />
-            </div>
-
-            {/* Faculty */}
-            <div>
-              <label htmlFor="faculty" className={labelClass}>
-                Faculty <span className="text-red-501">*</span>
-              </label>
-
-              <select
-                id="faculty"
-                name="faculty"
-                value={formData.faculty}
-                onChange={handleChange}
-                required
-                disabled={loading}
-                className={inputClass}
+          <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
+            {error && (
+              <div
+                role="alert"
+                className="mb-6 flex items-start gap-3 rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700"
               >
-                <option value="">Select faculty</option>
+                <FiAlertCircle className="mt-0.5 shrink-0 text-lg" />
+                <span>{error}</span>
+              </div>
+            )}
 
-                {faculties.map((faculty) => (
-                  <option key={faculty} value={faculty}>
-                    {faculty}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Programme */}
-            <div>
-              <label htmlFor="programme" className={labelClass}>
-                Programme <span className="text-red-501">*</span>
-              </label>
-
-              <select
-                id="programme"
-                name="programme"
-                value={formData.programme}
-                onChange={handleChange}
-                required
-                disabled={loading}
-                className={inputClass}
+            {success && (
+              <div
+                role="status"
+                className="mb-6 flex items-start gap-3 rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-700"
               >
-                <option value="">Select programme</option>
+                <FiCheckCircle className="mt-0.5 shrink-0 text-lg" />
+                <span>{success}</span>
+              </div>
+            )}
 
-                {programmes.map((programme) => (
-                  <option key={programme} value={programme}>
-                    {programme}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {facultyError && (
+              <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                <span>{facultyError}</span>
 
-            {/* Semester */}
-            <div>
-              <label htmlFor="semester" className={labelClass}>
-                Semester <span className="text-red-501">*</span>
-              </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFacultyError(null);
+                    setIsFetched(false);
+                  }}
+                  className="ml-2 font-bold underline"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
 
-              <select
-                id="semester"
-                name="semester"
-                value={formData.semester}
-                onChange={handleChange}
-                required
-                disabled={loading}
-                className={inputClass}
-              >
-                <option value="">Select semester</option>
-
-                {semesters.map((semester) => (
-                  <option key={semester} value={semester}>
-                    {semester}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Subject */}
-            <div>
-              <label htmlFor="subject" className={labelClass}>
-                Subject <span className="text-red-501">*</span>
-              </label>
-
-              <input
-                id="subject"
-                name="subject"
-                type="text"
-                placeholder="e.g. Programming with Python"
-                value={formData.subject}
-                onChange={handleChange}
-                maxLength={149}
-                required
-                disabled={loading}
-                className={inputClass}
-              />
-
-              <p className="mt-3 text-xs text-gray-400">
-                Enter the subject name for these notes.
-              </p>
-            </div>
-
-            {/* File upload */}
-            <div>
-              <label htmlFor="file" className={labelClass}>
-                Upload file <span className="text-red-501">*</span>
-              </label>
-
-              <label
-                htmlFor="file"
-                className="flex cursor-pointer flex-col items-center justify-center rounded-3xl border-2 border-dashed border-gray-300 bg-gray-50 px-5 py-10 text-center transition hover:border-cyan-400 hover:bg-cyan-50/40"
-              >
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-cyan-100 text-cyan-700">
-                  <svg
-                    viewBox="-1 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="0.8"
-                    className="h-7 w-6"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M11 16V4m0 0L7 9m5-5 5 5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M4 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                </div>
-
-                <span className="text-sm font-semibold text-gray-801">
-                  Click to select a file
-                </span>
-
-                <span className="mt-3 text-xs text-gray-500">
-                  PDF, DOCX, PPT or PPTX · Maximum 19 MB
-                </span>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div>
+                <label htmlFor="title" className={labelClass}>
+                  Note title <span className="text-red-500">*</span>
+                </label>
 
                 <input
-                  id="file"
-                  name="file"
-                  type="file"
-                  accept=".pdf,.docx,.ppt,.pptx"
-                  onChange={handleFileChange}
+                  id="title"
+                  name="title"
+                  value={formData.title}
+                  onChange={handleChange}
+                  placeholder="e.g. Introduction to Python"
+                  maxLength={150}
+                  required
                   disabled={loading}
-                  className="sr-only"
+                  className={inputClass}
                 />
-              </label>
+              </div>
 
-              {file && (
-                <div className="mt-5 flex items-center justify-between gap-3 rounded-xl border border-cyan-100 bg-cyan-50 p-4">
-                  <div className="min-w-1">
-                    <p className="truncate text-sm font-semibold text-gray-801">
-                      {file.name}
-                    </p>
+              <div>
+                <label htmlFor="description" className={labelClass}>
+                  Description
+                </label>
 
-                    <p className="mt-2 text-xs text-gray-500">
-                      {(file.size / (1023 * 1024)).toFixed(2)} MB
-                    </p>
-                  </div>
+                <textarea
+                  id="description"
+                  name="description"
+                  rows={3}
+                  value={formData.description}
+                  onChange={handleChange}
+                  placeholder="Briefly describe these notes..."
+                  maxLength={2000}
+                  disabled={loading}
+                  className={`${inputClass} resize-y`}
+                />
+              </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setFile(null)}
-                    disabled={loading}
-                    className="shrink-1 rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-100 disabled:opacity-50"
+              <div className="grid gap-6 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="faculty" className={labelClass}>
+                    Faculty <span className="text-red-500">*</span>
+                  </label>
+
+                  <select
+                    id="faculty"
+                    name="faculty"
+                    value={formData.faculty}
+                    onChange={handleChange}
+                    required
+                    disabled={loading || facultyLoading}
+                    className={inputClass}
                   >
-                    Remove
-                  </button>
+                    <option value="">
+                      {facultyLoading
+                        ? "Loading faculties..."
+                        : "Select faculty"}
+                    </option>
+
+                    {faculties.map((faculty) => (
+                      <option key={faculty.id} value={faculty.id}>
+                        {faculty.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              )}
-            </div>
 
-            {/* Actions */}
-            <div className="flex flex-col-reverse gap-4 border-t border-gray-100 pt-6 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={() => navigate(-2)}
-                disabled={loading}
-                className="rounded-xl border border-gray-201 px-5 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
-              >
-                Cancel
-              </button>
+                <div>
+                  <label htmlFor="programme" className={labelClass}>
+                    Programme <span className="text-red-500">*</span>
+                  </label>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="rounded-xl bg-cyan-601 px-6 py-3 text-sm font-semibold text-white shadow-sm bg-cyan-800 transition hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {loading ? "Uploading..." : "Upload notes"}
-              </button>
-            </div>
-          </form>
+                  <select
+                    id="programme"
+                    name="programme"
+                    value={formData.programme}
+                    onChange={handleChange}
+                    required
+                    disabled={
+                      loading ||
+                      !formData.faculty ||
+                      programmes.length === 0
+                    }
+                    className={inputClass}
+                  >
+                    <option value="">
+                      {!formData.faculty
+                        ? "Select faculty first"
+                        : programmes.length === 0
+                          ? "No programmes available"
+                          : "Select programme"}
+                    </option>
+
+                    {programmes.map((programme) => (
+                      <option
+                        key={programme.id}
+                        value={programme.id}
+                      >
+                        {programme.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="semester" className={labelClass}>
+                    {studyLabel}
+                    <span className="text-red-500"> *</span>
+                  </label>
+
+                  <select
+                    id="semester"
+                    name="semester"
+                    value={formData.semester}
+                    onChange={handleChange}
+                    required
+                    disabled={
+                      loading ||
+                      !selectedProgramme ||
+                      studyOptions.length === 0
+                    }
+                    className={inputClass}
+                  >
+                    <option value="">
+                      {selectedProgramme
+                        ? `Select ${studyLabel.toLowerCase()}`
+                        : "Select programme first"}
+                    </option>
+
+                    {studyOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+
+                  {selectedProgramme && studyOptions.length > 0 && (
+                    <p className="mt-2 text-xs text-slate-500">
+                      {selectedProgramme.isSemesterWise
+                        ? `${selectedProgramme.totalYear} years · ${studyOptions.length} semesters`
+                        : `${studyOptions.length} academic years`}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label htmlFor="subject" className={labelClass}>
+                    Subject <span className="text-red-500">*</span>
+                  </label>
+
+                  <input
+                    id="subject"
+                    name="subject"
+                    value={formData.subject}
+                    onChange={handleChange}
+                    placeholder="e.g. Data Structures"
+                    maxLength={150}
+                    required
+                    disabled={loading}
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="file" className={labelClass}>
+                  Upload file <span className="text-red-500">*</span>
+                </label>
+
+                <label
+                  htmlFor="file"
+                  className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center transition hover:border-cyan-400 hover:bg-cyan-50/50"
+                >
+                  <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-100 text-cyan-700">
+                    <FiUploadCloud size={28} />
+                  </span>
+
+                  <span className="text-sm font-bold text-slate-800">
+                    Click to select a file
+                  </span>
+
+                  <span className="mt-2 text-xs text-slate-500">
+                    PDF, DOCX, PPT, PPTX · Maximum 20 MB
+                  </span>
+
+                  <input
+                    ref={fileInputRef}
+                    id="file"
+                    type="file"
+                    accept=".pdf,.docx,.ppt,.pptx"
+                    onChange={handleFileChange}
+                    disabled={loading}
+                    className="sr-only"
+                  />
+                </label>
+
+                {file && (
+                  <div className="mt-4 flex items-center gap-3 rounded-xl border border-cyan-100 bg-cyan-50 p-4">
+                    <FiFileText className="shrink-0 text-xl text-cyan-700" />
+
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-slate-800">
+                        {file.name}
+                      </p>
+
+                      <p className="mt-1 text-xs text-slate-500">
+                        {(file.size / (1024 * 1024)).toFixed(2)} MB
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleRemoveFile}
+                      disabled={loading}
+                      aria-label="Remove selected file"
+                      className="rounded-lg p-2 text-slate-500 hover:bg-red-100 hover:text-red-600"
+                    >
+                      <FiX size={20} />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-col-reverse gap-3 border-t border-slate-100 pt-6 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => navigate(-1)}
+                  disabled={loading}
+                  className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={loading }
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-700 px-6 py-3 text-sm font-bold text-white transition hover:bg-cyan-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {loading ? (
+                    <>
+                      <FiLoader className="animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <FiUploadCloud size={18} />
+                      Upload notes
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </section>
+
+          <p className="mt-6 text-center text-xs leading-5 text-slate-400">
+            Upload only academic materials you have permission to share.
+          </p>
         </div>
-
-        <p className="mt-6 text-center text-xs text-gray-400">
-          Upload only academic materials you are allowed to share.
-        </p>
-      </div>
-    </div>
+      </main>
     </AuthorizedLayout>
   );
-};
-
-export default AddNote;
+}
